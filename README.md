@@ -5,10 +5,10 @@ completion, needs your input, stops making progress, or reaches a limit.
 
 ## Get started
 
-Install from GitHub and restart Pi:
+Install from npm and restart Pi:
 
 ```sh
-pi install git:github.com/ethanthoma/pi-goal
+pi install npm:@ethanthoma/pi-goal
 ```
 
 Or load it from a local checkout:
@@ -46,17 +46,30 @@ states or similar tool output can cause it to stop even when work remains.
 
 ## Publishing
 
-The npm package name is `@ethanthoma/pi-goal`. Authenticate with an npm account
-that can publish under the `@ethanthoma` scope:
+Releases publish through GitHub Actions using npm trusted publishing. No npm
+token is stored in GitHub.
+
+One-time setup in the npm package settings, under Trusted Publisher:
+
+- Provider: GitHub Actions
+- Owner: `ethanthoma`
+- Repository: `pi-goal`
+- Workflow filename: `publish.yml`
+- Environment: leave empty
+- Allow direct publishing with `npm publish` if this option is shown
+
+The package must already exist on npm. Push the workflow to `main` before
+releasing. For each release, update the version and lockfile, commit and push
+the changes, then push a matching tag:
 
 ```sh
-npm login
-npm publish --dry-run
-npm publish
+npm version 0.1.1 --message "chore: release %s"
+git push origin main
+git push origin v0.1.1
 ```
 
-Publishing runs the checks and tests below. After release, users can install
-with `pi install npm:@ethanthoma/pi-goal`.
+The workflow checks that the tag matches the package version and belongs to
+`main`. It runs checks and tests before publishing with provenance.
 
 ## Development
 

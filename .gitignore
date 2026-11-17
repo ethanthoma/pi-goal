@@ -8,3 +8,4 @@
 !/package.json
 !/package-lock.json
 !/test/goal.mjs
+!/.github/workflows/publish.yml

@@ -1,0 +1,40 @@
+name: publish
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - name: Validate release tag
+        run: |
+          test "$GITHUB_REF_NAME" = "v$(npm pkg get version | tr -d '\"')"
+          git merge-base --is-ancestor HEAD origin/main
+      - name: Install dependencies and Pi
+        run: |
+          npm ci
+          npm install --global @earendil-works/pi-coding-agent@1.4.0
+      - name: Publish with npm trusted publishing
+        run: npm publish --provenance
