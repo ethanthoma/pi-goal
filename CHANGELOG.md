@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0 — 2026-11-17
+## v0.2.0 - 2026-11-17
 
 - Resume a goal that hit its limits by granting additional turns or cost
   allowance. The prompt shows the new totals before confirmation; use
@@ -13,12 +13,12 @@
 - Revise a paused or blocked goal with `/goal revise <new objective>` without
   resetting usage or limits. The goal stays paused until resumed.
 
-## 0.1.2
+## v0.1.2 - 2026-11-17
 
 - Remove the default 50-turn cap for new goals. Use `--turns N` to set a cap
   explicitly.
 
-## 0.1.1
+## v0.1.1 - 2026-11-17
 
 - First npm release of `@ethanthoma/pi-goal`. Start, inspect, pause, resume, or
   clear goals saved with your Pi session. Goals stop on completion, blockers,
