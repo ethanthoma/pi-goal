@@ -87,6 +87,12 @@ export default function goalExtension(pi) {
 					ctx.ui.notify("No paused or blocked goal to resume.", "warning");
 					return;
 				}
+				const current = goal;
+				if (ctx.hasUI && budgetReason(current)) {
+					const updated = await topUp(current, ctx);
+					if (!updated || goal !== current) return;
+					goal = updated;
+				}
 				await activate(pi, ctx);
 				return;
 			}
@@ -355,6 +361,56 @@ function haltReason(state, run) {
 		};
 	}
 	return budgetReason(state);
+}
+
+/**
+ * @param {Goal} state
+ * @param {ExtensionContext} ctx
+ * @returns {Promise<Goal | null>}
+ */
+async function topUp(state, ctx) {
+	const updated = { ...state };
+	const usage = statusLine(state);
+	const invalid = () => {
+		ctx.ui.notify(
+			"Enter a valid positive allowance, then try /goal resume again.",
+			"warning",
+		);
+		return null;
+	};
+	if (state.run_count_max !== null && state.run_count >= state.run_count_max) {
+		const input = await ctx.ui.input(`${usage}\nAdditional turns:`);
+		if (input === undefined) return null;
+		const extra = Number(input);
+		const total = state.run_count + extra;
+		if (
+			!Number.isSafeInteger(total) ||
+			!Number.isSafeInteger(extra) ||
+			extra <= 0
+		)
+			return invalid();
+		updated.run_count_max = total;
+	}
+	if (state.cost_usd_max !== null && state.cost_usd >= state.cost_usd_max) {
+		const input = await ctx.ui.input(
+			`${usage}\nAdditional cost allowance (USD):`,
+		);
+		if (input === undefined) return null;
+		if (!/^\d*(?:\.\d{1,2})?$/.test(input.trim())) return invalid();
+		const total = state.cost_usd + Number(input);
+		if (!Number.isFinite(total) || total <= state.cost_usd) return invalid();
+		updated.cost_usd_max = total;
+	}
+	const turns = updated.run_count_max ?? "unlimited";
+	const cost =
+		updated.cost_usd_max === null
+			? "unlimited"
+			: `$${updated.cost_usd_max.toFixed(2)}`;
+	const confirmed = await ctx.ui.confirm(
+		"Resume goal with updated limits?",
+		`Total limits: ${turns} turns, ${cost} cost. An in-flight request can exceed the cost limit.`,
+	);
+	return confirmed ? updated : null;
 }
 
 /** @param {Goal} state */

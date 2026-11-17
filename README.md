@@ -39,7 +39,10 @@ a request already in flight can exceed the cost limit.
 | `/goal clear`       | Remove the goal                   |
 
 Goals are saved with your session and stay paused when you reopen it. Resuming
-keeps the same usage totals. Start a new goal if you need a larger budget.
+keeps the same usage totals. In interactive Pi, `/goal resume` asks for an
+additional allowance for each exhausted limit and shows the new totals before
+you confirm. The allowance is added to actual usage, including any cost overrun.
+Canceling leaves the goal unchanged.
 
 Pi is instructed to verify its work before reporting completion, but you should
 still review the result. Progress detection is heuristic: repeated workspace

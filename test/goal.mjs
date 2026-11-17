@@ -95,6 +95,25 @@ await hegel.testAsync(async (tc) => {
 	await run.command("resume");
 	assert.equal(run.state().status, "paused");
 	assert.equal(run.messages.length, sent);
+
+	run.ctx.hasUI = true;
+	const original = run.state();
+	run.ctx.ui.input = async () => "2";
+	run.ctx.ui.confirm = async () => false;
+	await run.command("resume");
+	assert.deepEqual(run.state(), original);
+	assert.equal(run.messages.length, sent);
+	run.ctx.ui.confirm = async () => true;
+	await run.command("resume");
+	const updated = run.state();
+	assert.equal(updated.status, "active");
+	assert.equal(updated.run_count, count);
+	assert.equal(updated.cost_usd, count * cost);
+	assert.equal(updated.run_count_max, count >= limit ? count + 2 : limit);
+	assert.equal(
+		updated.cost_usd_max,
+		count * cost >= cost_limit ? count * cost + 2 : cost_limit,
+	);
 });
 
 await hegel.testAsync(async (tc) => {
