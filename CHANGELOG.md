@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 — 2026-11-17
 
 - Resume a goal that hit its limits by granting additional turns or cost
   allowance. The prompt shows the new totals before confirmation; use
