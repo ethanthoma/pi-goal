@@ -116,6 +116,20 @@ await hegel.testAsync(async (tc) => {
 	);
 });
 
+{
+	const run = await runtime("--turns 1 --cost 1 objective");
+	run.handlers.agent_start();
+	run.handlers.turn_start();
+	run.turn(2);
+	const original = run.state();
+	await run.command("resume --add-turns 3");
+	assert.deepEqual(run.state(), original);
+	await run.command("resume --add-cost 1.50 --add-turns 3");
+	assert.equal(run.state().status, "active");
+	assert.equal(run.state().run_count_max, 4);
+	assert.equal(run.state().cost_usd_max, 3.5);
+}
+
 await hegel.testAsync(async (tc) => {
 	const status = tc.draw(gs.sampledFrom(["complete", "blocked"]));
 	const cost = tc.draw(gs.integers({ minValue: 0, maxValue: 100 }));

@@ -82,14 +82,15 @@ export default function goalExtension(pi) {
 				transition(pi, ctx, "paused", "paused by user");
 				return;
 			}
-			if (command === "resume") {
+			if (/^resume(?:\s|$)/.test(command)) {
 				if (!goal || goal.status === "active" || goal.status === "complete") {
 					ctx.ui.notify("No paused or blocked goal to resume.", "warning");
 					return;
 				}
 				const current = goal;
-				if (ctx.hasUI && budgetReason(current)) {
-					const updated = await topUp(current, ctx);
+				const flags = command.slice("resume".length).trim();
+				if (flags || (ctx.hasUI && budgetReason(current))) {
+					const updated = await topUp(current, ctx, flags);
 					if (!updated || goal !== current) return;
 					goal = updated;
 				}
@@ -366,9 +367,37 @@ function haltReason(state, run) {
 /**
  * @param {Goal} state
  * @param {ExtensionContext} ctx
+ * @param {string} flags
  * @returns {Promise<Goal | null>}
  */
-async function topUp(state, ctx) {
+async function topUp(state, ctx, flags) {
+	const allowances = new Map();
+	if (flags) {
+		const tokens = flags.split(/\s+/);
+		for (let i = 0; i < tokens.length; i += 2) {
+			const flag = tokens[i];
+			if (
+				(flag !== "--add-turns" && flag !== "--add-cost") ||
+				allowances.has(flag) ||
+				tokens[i + 1] === undefined
+			) {
+				ctx.ui.notify(
+					"Usage: /goal resume [--add-turns N] [--add-cost USD]",
+					"warning",
+				);
+				return null;
+			}
+			allowances.set(flag, tokens[i + 1]);
+		}
+	}
+	const inputFor = async (flag, prompt) => {
+		if (!flags) return ctx.ui.input(prompt);
+		const value = allowances.get(flag);
+		if (value === undefined)
+			ctx.ui.notify(`Exhausted limit: supply ${flag}.`, "warning");
+		allowances.delete(flag);
+		return value;
+	};
 	const updated = { ...state };
 	const usage = statusLine(state);
 	const invalid = () => {
@@ -379,7 +408,7 @@ async function topUp(state, ctx) {
 		return null;
 	};
 	if (state.run_count_max !== null && state.run_count >= state.run_count_max) {
-		const input = await ctx.ui.input(`${usage}\nAdditional turns:`);
+		const input = await inputFor("--add-turns", `${usage}\nAdditional turns:`);
 		if (input === undefined) return null;
 		const extra = Number(input);
 		const total = state.run_count + extra;
@@ -392,7 +421,8 @@ async function topUp(state, ctx) {
 		updated.run_count_max = total;
 	}
 	if (state.cost_usd_max !== null && state.cost_usd >= state.cost_usd_max) {
-		const input = await ctx.ui.input(
+		const input = await inputFor(
+			"--add-cost",
 			`${usage}\nAdditional cost allowance (USD):`,
 		);
 		if (input === undefined) return null;
@@ -400,6 +430,11 @@ async function topUp(state, ctx) {
 		const total = state.cost_usd + Number(input);
 		if (!Number.isFinite(total) || total <= state.cost_usd) return invalid();
 		updated.cost_usd_max = total;
+	}
+	if (flags) {
+		if (allowances.size === 0) return updated;
+		ctx.ui.notify("Only supply top-ups for exhausted limits.", "warning");
+		return null;
 	}
 	const turns = updated.run_count_max ?? "unlimited";
 	const cost =

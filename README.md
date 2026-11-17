@@ -42,7 +42,10 @@ Goals are saved with your session and stay paused when you reopen it. Resuming
 keeps the same usage totals. In interactive Pi, `/goal resume` asks for an
 additional allowance for each exhausted limit and shows the new totals before
 you confirm. The allowance is added to actual usage, including any cost overrun.
-Canceling leaves the goal unchanged.
+Canceling leaves the goal unchanged. To skip the prompts, use
+`/goal resume --add-turns 10 --add-cost 2.00`. Supply a flag for each exhausted
+limit and omit flags for other limits. The flags authorize the top-up without
+confirmation; if any allowance is missing or invalid, nothing changes.
 
 Pi is instructed to verify its work before reporting completion, but you should
 still review the result. Progress detection is heuristic: repeated workspace
