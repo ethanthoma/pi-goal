@@ -54,10 +54,10 @@ const seen_workspaces = boundedSet(SEEN_COUNT_MAX);
 export default function goalExtension(pi) {
 	pi.registerCommand("goal", {
 		description:
-			"Start, inspect, pause, resume, or clear a goal: /goal [--turns N] [--cost USD] <objective>",
+			"Start, inspect, pause, revise, resume, or clear a goal: /goal [--turns N] [--cost USD] <objective>",
 		getArgumentCompletions: (prefix) => {
-			const matches = ["status", "pause", "resume", "clear"].filter((value) =>
-				value.startsWith(prefix),
+			const matches = ["status", "pause", "revise", "resume", "clear"].filter(
+				(value) => value.startsWith(prefix),
 			);
 			return matches.length
 				? matches.map((value) => ({ value, label: value }))
@@ -80,6 +80,29 @@ export default function goalExtension(pi) {
 					return;
 				}
 				transition(pi, ctx, "paused", "paused by user");
+				return;
+			}
+			if (/^revise(?:\s|$)/.test(command)) {
+				const objective = command.slice("revise".length).trim();
+				if (!objective) {
+					ctx.ui.notify("Usage: /goal revise <new objective>", "warning");
+					return;
+				}
+				if (!goal || goal.status === "complete") {
+					ctx.ui.notify("No unfinished goal to revise.", "warning");
+					return;
+				}
+				if (goal.status === "active" || !ctx.isIdle()) {
+					ctx.ui.notify(
+						"Pause the goal and wait for Pi to become idle before revising it.",
+						"warning",
+					);
+					return;
+				}
+				goal.objective = objective;
+				seen_outputs.clear();
+				seen_workspaces.clear();
+				transition(pi, ctx, "paused", "objective revised");
 				return;
 			}
 			if (/^resume(?:\s|$)/.test(command)) {

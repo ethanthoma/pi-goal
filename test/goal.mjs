@@ -117,6 +117,30 @@ await hegel.testAsync(async (tc) => {
 });
 
 {
+	const run = await runtime("--turns 4 --cost 5 original objective");
+	await run.command("revise rejected while active");
+	assert.equal(run.state().objective, "original objective");
+	run.handlers.agent_start();
+	run.handlers.turn_start();
+	run.turn(1);
+	await run.command("pause");
+	const original = run.state();
+	const sent = run.messages.length;
+	await run.command("revise");
+	assert.deepEqual(run.state(), original);
+	await run.command("revise revised objective");
+	assert.deepEqual(run.state(), {
+		...original,
+		objective: "revised objective",
+		reason: "objective revised",
+		revision: original.revision + 1,
+	});
+	assert.equal(run.messages.length, sent);
+	await run.command("resume");
+	assert.match(run.messages.at(-1).content, /revised objective/);
+}
+
+{
 	const run = await runtime("--turns 1 --cost 1 objective");
 	run.handlers.agent_start();
 	run.handlers.turn_start();

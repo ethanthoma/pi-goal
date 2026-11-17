@@ -36,7 +36,11 @@ a request already in flight can exceed the cost limit.
 | `/goal status`      | Show the goal and usage           |
 | `/goal pause`       | Stop automatic continuation       |
 | `/goal resume`      | Continue a paused or blocked goal |
+| `/goal revise <new objective>` | Revise a paused or blocked goal |
 | `/goal clear`       | Remove the goal                   |
+
+To revise an active goal, pause it first and wait for Pi to become idle. Revising
+keeps the same goal, usage, and limits. It leaves the goal paused until you resume.
 
 Goals are saved with your session and stay paused when you reopen it. Resuming
 keeps the same usage totals. In interactive Pi, `/goal resume` asks for an
