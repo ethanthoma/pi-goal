@@ -23,7 +23,8 @@ Then give it a goal:
 /goal --turns 50 --cost 5 Fix the failing tests and verify the changes
 ```
 
-`--turns` limits model responses (default: 50). `--cost` sets an optional dollar
+There is no default turn limit. Use `--turns` to cap model responses.
+`--cost` sets an optional dollar
 limit using provider-reported prices. Limits are checked after each response, so
 a request already in flight can exceed the cost limit.
 
