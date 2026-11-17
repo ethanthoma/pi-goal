@@ -1,0 +1,21 @@
+{
+    "name": "pi-goal",
+    "version": "0.1.0",
+    "private": true,
+    "scripts": {
+        "check": "node --check index.js && node --check test/goal.mjs",
+        "test": "node test/goal.mjs"
+    },
+    "description": "Goal mode for Pi as a persisted state machine that stops instead of burning requests",
+    "keywords": [
+        "pi-package"
+    ],
+    "pi": {
+        "extensions": [
+            "./index.js"
+        ]
+    },
+    "devDependencies": {
+        "@hegeldev/hegel": "0.5.8"
+    }
+}
