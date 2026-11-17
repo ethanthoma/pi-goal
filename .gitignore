@@ -2,6 +2,8 @@
 !*/
 !/.gitignore
 !/README.md
+!/LICENSE-MIT
+!/LICENSE-APACHE
 !/index.js
 !/package.json
 !/package-lock.json

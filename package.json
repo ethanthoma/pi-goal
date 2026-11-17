@@ -1,12 +1,31 @@
 {
-    "name": "pi-goal",
+    "name": "@ethanthoma/pi-goal",
     "version": "0.1.0",
-    "private": true,
+    "license": "(MIT OR Apache-2.0)",
+    "type": "module",
+    "files": [
+        "index.js",
+        "LICENSE-MIT",
+        "LICENSE-APACHE"
+    ],
+    "engines": {
+        "node": ">=20.11"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/ethanthoma/pi-goal.git"
+    },
+    "homepage": "https://github.com/ethanthoma/pi-goal#readme",
+    "bugs": "https://github.com/ethanthoma/pi-goal/issues",
+    "publishConfig": {
+        "access": "public"
+    },
     "scripts": {
         "check": "node --check index.js && node --check test/goal.mjs",
-        "test": "node test/goal.mjs"
+        "test": "node test/goal.mjs",
+        "prepublishOnly": "npm run check && npm test"
     },
-    "description": "Goal mode for Pi as a persisted state machine that stops instead of burning requests",
+    "description": "Goal mode for Pi with automatic continuation, progress checks, and turn and cost limits.",
     "keywords": [
         "pi-package"
     ],

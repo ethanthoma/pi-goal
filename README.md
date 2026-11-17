@@ -5,7 +5,13 @@ completion, needs your input, stops making progress, or reaches a limit.
 
 ## Get started
 
-From this checkout, load the extension:
+Install from GitHub and restart Pi:
+
+```sh
+pi install git:github.com/ethanthoma/pi-goal
+```
+
+Or load it from a local checkout:
 
 ```sh
 pi --extension ./index.js
@@ -38,6 +44,20 @@ Pi is instructed to verify its work before reporting completion, but you should
 still review the result. Progress detection is heuristic: repeated workspace
 states or similar tool output can cause it to stop even when work remains.
 
+## Publishing
+
+The npm package name is `@ethanthoma/pi-goal`. Authenticate with an npm account
+that can publish under the `@ethanthoma` scope:
+
+```sh
+npm login
+npm publish --dry-run
+npm publish
+```
+
+Publishing runs the checks and tests below. After release, users can install
+with `pi install npm:@ethanthoma/pi-goal`.
+
 ## Development
 
 Requires Node 20.11+, npm, and `pi` on PATH.
@@ -52,3 +72,8 @@ Tests use [Hegel](https://hegel.dev/) to exercise budgets, accounting,
 continuation cancellation, and stalls. A Pi RPC smoke check verifies that the
 extension loads. Tests make no model requests. Provider and interactive UI
 behavior are not covered.
+
+## License
+
+Licensed under either [MIT](LICENSE-MIT) or [Apache 2.0](LICENSE-APACHE), at
+your option.
