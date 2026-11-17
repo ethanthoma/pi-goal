@@ -173,11 +173,15 @@ await hegel.testAsync(async (tc) => {
 await hegel.testAsync(async (tc) => {
 	const cost = tc.draw(gs.integers({ minValue: 0, maxValue: 10 }));
 	const run = await runtime();
-	for (let i = 0; i < 3; i++) {
+	for (let i = 0; i < 4; i++) {
 		run.handlers.agent_start();
 		run.handlers.turn_start();
 		run.turn(cost);
 		await run.handlers.agent_settled({ aborted: false }, run.ctx);
+		if (i === 2) {
+			assert.equal(run.state().status, "active");
+			assert.match(run.messages.at(-1).content, /Try a different diagnostic/);
+		}
 	}
 	assert.equal(run.state().status, "blocked");
 	assert.match(run.state().reason, /no new workspace/);

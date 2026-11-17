@@ -355,13 +355,15 @@ function haltReason(state, run) {
 	if (!run_made_tool_call && run_text_tail.endsWith("?")) {
 		return { status: "blocked", text: "agent asked a question" };
 	}
-	if (stall_count >= STALL_COUNT_MAX) {
+	const budget = budgetReason(state);
+	if (budget) return budget;
+	if (stall_count > STALL_COUNT_MAX) {
 		return {
 			status: "blocked",
 			text: `no new workspace state or tool output in ${stall_count} consecutive runs`,
 		};
 	}
-	return budgetReason(state);
+	return null;
 }
 
 /**
@@ -575,10 +577,15 @@ function syncUi(pi, ctx) {
 /** @param {ExtensionAPI} pi */
 function sendContinuation(pi) {
 	if (goal?.status !== "active") return;
+	const message = full_brief_needed ? brief(goal) : nudge(goal);
+	const recovery =
+		stall_count === STALL_COUNT_MAX
+			? `\n\nNo new workspace state or tool output in ${stall_count} consecutive runs. Try a different diagnostic or call goal_update with the specific blocker. Do not repeat the same attempt.`
+			: "";
 	pi.sendMessage(
 		{
 			customType: MESSAGE_TYPE,
-			content: full_brief_needed ? brief(goal) : nudge(goal),
+			content: message + recovery,
 			display: false,
 			details: { goal_id: goal.id, revision: goal.revision },
 		},
@@ -692,8 +699,23 @@ function describe(state) {
 	const lines = [`Goal ${state.status}: ${state.objective}`];
 	if (state.reason) lines.push(`Reason: ${state.reason}`);
 	lines.push(statusLine(state));
-	if (state.status === "paused" || state.status === "blocked")
-		lines.push("/goal resume to continue, /goal clear to drop it.");
+	if (state.status === "paused" || state.status === "blocked") {
+		const flags = [];
+		if (state.run_count_max !== null && state.run_count >= state.run_count_max)
+			flags.push("--add-turns N");
+		if (state.cost_usd_max !== null && state.cost_usd >= state.cost_usd_max)
+			flags.push("--add-cost USD");
+		if (flags.length > 0) {
+			lines.push(
+				`Use /goal resume for a top-up prompt, or /goal resume ${flags.join(" ")}.`,
+			);
+		} else if (state.reason?.startsWith("no new workspace state")) {
+			lines.push("Give Pi a different lead, then use /goal resume.");
+		} else {
+			lines.push("Use /goal resume to continue.");
+		}
+		lines.push("Use /goal clear to drop the goal.");
+	}
 	return lines.join("\n");
 }
 
