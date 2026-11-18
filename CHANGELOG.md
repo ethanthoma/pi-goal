@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.2.1 - 2026-11-17
 
 - Reject completion and blocker reports carrying an outdated goal token.
 - Show visible lifecycle messages when goals start, resume, change, stop, or
