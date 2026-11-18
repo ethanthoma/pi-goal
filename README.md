@@ -51,8 +51,22 @@ Canceling leaves the goal unchanged. To skip the prompts, use
 limit and omit flags for other limits. The flags authorize the top-up without
 confirmation; if any allowance is missing or invalid, nothing changes.
 
-Pi is instructed to verify its work before reporting completion, but you should
-still review the result. Progress detection is heuristic: repeated workspace
+Completion requires a fresh-context review using the current model and read-only
+workspace tools. The reviewer compares the full user objective with the worker's
+claimed evidence, looking for omitted requirements and completed slices presented
+as finished products. Unfinished work is returned to the agent; an unavailable,
+interrupted, or invalid review blocks completion rather than accepting it.
+
+Review uses an ephemeral session without discovered extensions, skills, or project
+instructions. It can read/search files but cannot run tests or modify the workspace.
+Review responses and provider-reported cost count against the goal's existing
+limits. Each review is bounded to eight responses and two minutes, with no automatic
+request retries. Requests already in flight can exceed a limit. No separate model
+configuration is needed, but reviews incur additional model usage.
+
+Independent review is still model judgment, not proof: it can miss requirements,
+misread evidence, or encounter misleading workspace content. You should still
+review the result. Progress detection is heuristic: repeated workspace
 states or similar tool output can cause it to stop even when work remains.
 
 ## Publishing

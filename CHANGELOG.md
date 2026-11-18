@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Gate completion on a fresh-context, read-only workspace review against the full
+  objective. Missing requirements return to the worker; review failures block
+  completion. Review usage counts against existing turn and cost limits.
+
 ## v0.2.1 - 2026-11-17
 
 - Reject completion and blocker reports carrying an outdated goal token.

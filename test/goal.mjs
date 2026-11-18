@@ -4,12 +4,65 @@ import { spawn } from "node:child_process";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 
-const source = (
-	await readFile(new URL("../index.js", import.meta.url), "utf8")
-).replace(
-	'import { Box, Text } from "@earendil-works/pi-tui";',
-	"class Text { constructor(text) { this.text = text; } } class Box { addChild() {} }",
-);
+const source = (await readFile(new URL("../index.js", import.meta.url), "utf8"))
+	.replace(
+		'import { Box, Text } from "@earendil-works/pi-tui";',
+		"class Text { constructor(text) { this.text = text; } } class Box { addChild() {} }",
+	)
+	.replace(
+		'import * as review_sdk from "@earendil-works/pi-coding-agent";',
+		"const review_sdk = globalThis.goal_review_sdk;",
+	);
+const review = {
+	status: "complete",
+	reason: "All requirements inspected.",
+	cost: 0,
+	inspect: true,
+	hook: null,
+	disposed: 0,
+	options: null,
+	prompt: null,
+};
+globalThis.goal_review_sdk = {
+	createExtensionRuntime: () => ({}),
+	SessionManager: { inMemory: () => ({}) },
+	SettingsManager: { inMemory: (settings) => settings },
+	createAgentSession: async (options) => {
+		review.options = options;
+		let listener;
+		return {
+			session: {
+				subscribe: (callback) => {
+					listener = callback;
+					return () => {};
+				},
+				prompt: async (prompt) => {
+					review.prompt = JSON.parse(prompt);
+					if (review.hook) await review.hook();
+					if (review.inspect)
+						listener({
+							type: "tool_execution_end",
+							toolName: "read",
+							isError: false,
+						});
+					listener({
+						type: "message_end",
+						message: {
+							role: "assistant",
+							usage: { cost: { total: review.cost } },
+						},
+					});
+				},
+				getLastAssistantText: () =>
+					JSON.stringify({ status: review.status, reason: review.reason }),
+				abort: async () => {},
+				dispose: () => {
+					review.disposed++;
+				},
+			},
+		};
+	},
+};
 let instance_count = 0;
 
 async function runtime(args = "objective") {
@@ -48,6 +101,7 @@ async function runtime(args = "objective") {
 	};
 	const ctx = {
 		cwd: process.cwd(),
+		model: { id: "test-model" },
 		ui: { notify() {}, setStatus() {}, confirm: async () => true },
 		isIdle: () => true,
 		hasPendingMessages: () => false,
@@ -194,7 +248,7 @@ await hegel.testAsync(async (tc) => {
 	run.turn(cost);
 	assert.equal(run.state().status, status);
 	assert.equal(run.state().cost_usd, cost);
-	assert.equal(run.state().run_count, 1);
+	assert.equal(run.state().run_count, status === "complete" ? 2 : 1);
 });
 
 await hegel.testAsync(async (tc) => {
@@ -235,6 +289,93 @@ await hegel.testAsync(async (tc) => {
 	assert.equal(run.state().status, "blocked");
 	assert.match(run.state().reason, /no new workspace/);
 });
+await hegel.testAsync(async (tc) => {
+	const verdict = tc.draw(
+		gs.sampledFrom(["complete", "incomplete", "blocked", "invalid"]),
+	);
+	const inspected = tc.draw(gs.booleans());
+	const cost = tc.draw(gs.integers({ minValue: 0, maxValue: 10 }));
+	const operation = tc.draw(gs.sampledFrom(["none", "pause", "clear"]));
+	const run = await runtime("build the full TUI end-to-end");
+	const token = run.messages
+		.at(-1)
+		.content.match(/Completion token: ([a-f0-9]+)/)[1];
+	Object.assign(review, {
+		status: verdict,
+		reason: "Missing TUI; backend slice is not the full objective.",
+		cost,
+		inspect: inspected,
+		hook: operation === "none" ? null : () => run.command(operation),
+	});
+	const disposed = review.disposed;
+	const result = await run.tools.goal_update.execute(
+		"review",
+		{
+			token,
+			status: "complete",
+			reason: "Backend cache implemented; tests pass.",
+		},
+		undefined,
+		undefined,
+		run.ctx,
+	);
+	assert.equal(review.disposed, disposed + 1);
+	assert.deepEqual(review.options.tools, ["read", "grep", "find", "ls"]);
+	assert.equal(review.prompt.objective, "build the full TUI end-to-end");
+	assert.match(
+		review.options.resourceLoader.getSystemPrompt(),
+		/not a finished TUI/,
+	);
+	if (operation === "clear") assert.equal(run.state(), null);
+	else {
+		assert.equal(run.state().cost_usd, cost);
+		assert.equal(run.state().run_count, 1);
+		const expected =
+			operation === "pause"
+				? "paused"
+				: !inspected || verdict === "invalid" || verdict === "blocked"
+					? "blocked"
+					: verdict === "incomplete"
+						? "active"
+						: "complete";
+		assert.equal(run.state().status, expected);
+		assert.equal(result.isError === true, expected !== "complete");
+		if (expected === "active")
+			assert.match(result.content[0].text, /Missing TUI/);
+	}
+});
+Object.assign(review, {
+	status: "complete",
+	reason: "All requirements inspected.",
+	cost: 0,
+	inspect: true,
+	hook: null,
+});
+await hegel.testAsync(async (tc) => {
+	const allowance = tc.draw(gs.integers({ minValue: 1, maxValue: 10 }));
+	const kind = tc.draw(gs.sampledFrom(["cost", "turns"]));
+	const run = await runtime(`--${kind} ${allowance} full objective`);
+	const token = run.messages
+		.at(-1)
+		.content.match(/Completion token: ([a-f0-9]+)/)[1];
+	Object.assign(review, { cost: kind === "cost" ? allowance : 0, hook: null });
+	if (kind === "turns") {
+		for (let i = 1; i < allowance; i++) {
+			run.handlers.turn_start();
+			run.turn(0);
+		}
+	}
+	await run.tools.goal_update.execute(
+		"budget-review",
+		{ token, status: "complete", reason: "claimed evidence" },
+		undefined,
+		undefined,
+		run.ctx,
+	);
+	assert.equal(run.state().status, "paused");
+	assert.match(run.state().reason, /limit reached/);
+});
+review.cost = 0;
 console.log("Hegel lifecycle properties passed");
 
 // Exercise the installed Pi loader without starting a provider request.
