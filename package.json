@@ -5,6 +5,7 @@
     "type": "module",
     "files": [
         "index.js",
+        "CHANGELOG.md",
         "LICENSE-MIT",
         "LICENSE-APACHE"
     ],
@@ -25,9 +26,13 @@
         "test": "node test/goal.mjs",
         "prepublishOnly": "npm run check && npm test"
     },
-    "description": "Goal mode for Pi with automatic continuation, progress checks, and turn and cost limits.",
+    "description": "Persistent goals for the Pi coding agent, with automatic continuation, stall recovery, and optional turn and cost budgets.",
     "keywords": [
-        "pi-package"
+        "pi-package",
+        "pi-extension",
+        "goal",
+        "agent",
+        "automation"
     ],
     "pi": {
         "extensions": [

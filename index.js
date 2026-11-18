@@ -1,5 +1,6 @@
 // Goal mode lifecycle and usage: see README.md.
 import { createHash } from "node:crypto";
+import { Box, Text } from "@earendil-works/pi-tui";
 
 /** @typedef {import("@mariozechner/pi-coding-agent").ExtensionAPI} ExtensionAPI */
 /** @typedef {import("@mariozechner/pi-coding-agent").ExtensionContext} ExtensionContext */
@@ -45,6 +46,7 @@ let compaction_failed = false;
 let ui_prompt_open = false;
 let full_brief_needed = true;
 let stall_count = 0;
+let completion_token = "";
 /** Hashes of normalized tool outputs seen during this goal. */
 const seen_outputs = boundedSet(SEEN_COUNT_MAX);
 /** Hashes of workspace states seen during this goal. */
@@ -52,6 +54,32 @@ const seen_workspaces = boundedSet(SEEN_COUNT_MAX);
 
 /** @param {ExtensionAPI} pi */
 export default function goalExtension(pi) {
+	pi.registerMessageRenderer("goal-lifecycle", (message, options, theme) => {
+		const content = typeof message.content === "string" ? message.content : "";
+		const box = new Box(options.outputPad, 1, (text) =>
+			theme.bg("customMessageBg", text),
+		);
+		const status = message.details?.status;
+		const headings = {
+			active: "Goal active",
+			blocked: "Blocked — needs attention",
+			complete: "Goal complete",
+			paused: "Goal paused",
+			recovery: "Trying a different approach",
+		};
+		const heading = headings[status];
+		const color =
+			status === "complete"
+				? "success"
+				: status === "active"
+					? "customMessageText"
+					: "warning";
+		const colored = heading
+			? `${theme.fg(color, heading)}\n\n${theme.fg("customMessageText", content)}`
+			: theme.fg("customMessageText", content);
+		box.addChild(new Text(colored, 0, 0));
+		return box;
+	});
 	pi.registerCommand("goal", {
 		description:
 			"Start, inspect, pause, revise, resume, or clear a goal: /goal [--turns N] [--cost USD] <objective>",
@@ -171,6 +199,10 @@ export default function goalExtension(pi) {
 		parameters: /** @type {any} */ ({
 			type: "object",
 			properties: {
+				token: {
+					type: "string",
+					description: "Completion token from the current goal instructions.",
+				},
 				status: { type: "string", enum: ["complete", "blocked"] },
 				reason: {
 					type: "string",
@@ -178,13 +210,24 @@ export default function goalExtension(pi) {
 						"complete: the evidence that each requirement is met. blocked: what you need from the user.",
 				},
 			},
-			required: ["status", "reason"],
+			required: ["token", "status", "reason"],
 			additionalProperties: false,
 		}),
 		async execute(_tool_call_id, params, _signal, _on_update, ctx) {
 			if (goal?.status !== "active") {
 				return {
 					content: [{ type: "text", text: "No active goal." }],
+					isError: true,
+				};
+			}
+			if (params.token !== completion_token) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: "Stale goal update rejected. Use the completion token from the latest goal instructions.",
+						},
+					],
 					isError: true,
 				};
 			}
@@ -568,12 +611,25 @@ function outputHash(result) {
  */
 function transition(pi, ctx, status, reason) {
 	if (!goal) return;
+	if (goal.status === status && goal.reason === reason) return;
+	if (status === "active" || reason === "objective revised") {
+		completion_token = sha256(
+			`${goal.id}:${goal.revision}:${Date.now()}:${Math.random()}`,
+		);
+	}
 	goal.status = status;
 	goal.reason = reason;
 	goal.revision += 1;
 	persist(pi, ctx);
-	if (status !== "active")
-		ctx.ui.notify(describe(goal), status === "complete" ? "info" : "warning");
+	pi.sendMessage(
+		{
+			customType: "goal-lifecycle",
+			content: lifecycleBody(goal),
+			details: { status: goal.status },
+			display: true,
+		},
+		{ triggerTurn: false },
+	);
 }
 
 /**
@@ -600,11 +656,23 @@ function syncUi(pi, ctx) {
 /** @param {ExtensionAPI} pi */
 function sendContinuation(pi) {
 	if (goal?.status !== "active") return;
-	const message = full_brief_needed ? brief(goal) : nudge(goal);
+	const message = `${full_brief_needed ? brief(goal) : nudge(goal)}\nCompletion token: ${completion_token}. Supply this as token in goal_update.`;
 	const recovery =
 		stall_count === STALL_COUNT_MAX
 			? `\n\nNo new workspace state or tool output in ${stall_count} consecutive runs. Try a different diagnostic or call goal_update with the specific blocker. Do not repeat the same attempt.`
 			: "";
+	if (recovery) {
+		pi.sendMessage(
+			{
+				customType: "goal-lifecycle",
+				content:
+					"No new progress detected in 3 runs. Pi will try a different diagnostic before blocking.",
+				details: { status: "recovery" },
+				display: true,
+			},
+			{ triggerTurn: false },
+		);
+	}
 	pi.sendMessage(
 		{
 			customType: MESSAGE_TYPE,
@@ -707,8 +775,21 @@ function parseStartArgs(args) {
  * @param {Goal} state
  * @returns {string}
  */
+function usageLine(state) {
+	const turns =
+		state.run_count_max === null
+			? `${state.run_count}`
+			: `${state.run_count} / ${state.run_count_max}`;
+	const cost =
+		state.cost_usd_max === null
+			? `$${state.cost_usd.toFixed(2)} spent`
+			: `$${state.cost_usd.toFixed(2)} / $${state.cost_usd_max.toFixed(2)}`;
+	return `${turns} turns · ${cost}`;
+}
+
+/** @param {Goal} state */
 function statusLine(state) {
-	const usage = `${state.run_count}${state.run_count_max === null ? "" : `/${state.run_count_max}`} runs · $${state.cost_usd.toFixed(2)}`;
+	const usage = usageLine(state);
 	if (state.status === "active") return `⚑ goal · ${usage}`;
 	if (state.status === "complete") return `✓ goal complete · ${usage}`;
 	return `‖ goal ${state.status} · ${usage}`;
@@ -718,10 +799,33 @@ function statusLine(state) {
  * @param {Goal} state
  * @returns {string}
  */
+function lifecycleBody(state) {
+	const lines = [state.objective];
+	if (state.reason) lines.push(state.reason);
+	lines.push(usageLine(state));
+	if (state.status === "paused" || state.status === "blocked") {
+		const flags = [];
+		if (state.run_count_max !== null && state.run_count >= state.run_count_max)
+			flags.push("--add-turns N");
+		if (state.cost_usd_max !== null && state.cost_usd >= state.cost_usd_max)
+			flags.push("--add-cost USD");
+		lines.push(
+			flags.length
+				? `Use /goal resume to grant more allowance, or /goal resume ${flags.join(" ")}.`
+				: state.status === "paused"
+					? "Use /goal resume when ready."
+					: "Resolve the blocker, then /goal resume.",
+		);
+	}
+	return lines.join("\n\n");
+}
+
+/** @param {Goal} state */
 function describe(state) {
-	const lines = [`Goal ${state.status}: ${state.objective}`];
-	if (state.reason) lines.push(`Reason: ${state.reason}`);
-	lines.push(statusLine(state));
+	const row = (label, value) => `${`${label}:`.padEnd(11)}${value}`;
+	const lines = [row("Goal", state.status), row("Objective", state.objective)];
+	if (state.reason) lines.push(row("Reason", state.reason));
+	lines.push(row("Usage", statusLine(state)));
 	if (state.status === "paused" || state.status === "blocked") {
 		const flags = [];
 		if (state.run_count_max !== null && state.run_count >= state.run_count_max)

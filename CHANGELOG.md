@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Reject completion and blocker reports carrying an outdated goal token.
+- Show visible lifecycle messages when goals start, resume, change, stop, or
+  enter stall recovery, without displaying every continuation.
+- Improve package discovery metadata and include this changelog in npm releases.
+
 ## v0.2.0 - 2026-11-17
 
 - Resume a goal that hit its limits by granting additional turns or cost

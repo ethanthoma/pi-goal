@@ -4,7 +4,12 @@ import { spawn } from "node:child_process";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 
-const source = await readFile(new URL("../index.js", import.meta.url), "utf8");
+const source = (
+	await readFile(new URL("../index.js", import.meta.url), "utf8")
+).replace(
+	'import { Box, Text } from "@earendil-works/pi-tui";',
+	"class Text { constructor(text) { this.text = text; } } class Box { addChild() {} }",
+);
 let instance_count = 0;
 
 async function runtime(args = "objective") {
@@ -19,6 +24,7 @@ async function runtime(args = "objective") {
 	let abort_count = 0;
 	let active_tools = [];
 	const pi = {
+		registerMessageRenderer() {},
 		registerCommand: (name, command) => {
 			commands[name] = command;
 		},
@@ -118,6 +124,9 @@ await hegel.testAsync(async (tc) => {
 
 {
 	const run = await runtime("--turns 4 --cost 5 original objective");
+	const old_token = run.messages
+		.at(-1)
+		.content.match(/Completion token: ([a-f0-9]+)/)[1];
 	await run.command("revise rejected while active");
 	assert.equal(run.state().objective, "original objective");
 	run.handlers.agent_start();
@@ -135,9 +144,19 @@ await hegel.testAsync(async (tc) => {
 		reason: "objective revised",
 		revision: original.revision + 1,
 	});
-	assert.equal(run.messages.length, sent);
+	assert.equal(run.messages.length, sent + 1);
 	await run.command("resume");
 	assert.match(run.messages.at(-1).content, /revised objective/);
+	const current = run.state();
+	const result = await run.tools.goal_update.execute(
+		"stale",
+		{ token: old_token, status: "complete", reason: "old evidence" },
+		undefined,
+		undefined,
+		run.ctx,
+	);
+	assert.equal(result.isError, true);
+	assert.deepEqual(run.state(), current);
 }
 
 {
@@ -161,7 +180,13 @@ await hegel.testAsync(async (tc) => {
 	run.handlers.turn_start();
 	await run.tools.goal_update.execute(
 		"call",
-		{ status, reason: "evidence" },
+		{
+			status,
+			reason: "evidence",
+			token: run.messages
+				.at(-1)
+				.content.match(/Completion token: ([a-f0-9]+)/)[1],
+		},
 		undefined,
 		undefined,
 		run.ctx,
@@ -181,7 +206,7 @@ await hegel.testAsync(async (tc) => {
 	);
 	const run = await runtime();
 	for (const command of commands) {
-		const old = run.messages.at(-1);
+		const old = run.messages.findLast((message) => message.details?.goal_id);
 		await run.command(command);
 		const current = run.state();
 		const valid =
